@@ -121,6 +121,14 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode{
     constructor(item){
         this.item = item;
     }
+
+    isMathematicOperator(){
+        return ["+", "=", "/", "*", "-"].includes(this.item);
+    }
+
+    isFunctionParameterOperator(){
+        return ["(", ",", ")"].includes(this.item);
+    }
 }
 
 class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
@@ -130,12 +138,11 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineCommandStatement{
+class SnakeCharmerConsoleClassSourceLineCommandCallable{
 
-    constructor(item1,opcode,item2){
-        this.item1 = item1;
-        this.opcode = opcode;
-        this.item2 = item2;
+    constructor(functionname,parameters){
+        this.functionname = functionname;
+        this.parameters = parameters;
     }
 }
 
@@ -157,7 +164,7 @@ class SnakeCharmerPythonClassSourceLine{
                 this.tabs++;
             }else{
                 firstone = false;
-                if([" ","\"","(",")","<",">",":","+","=","/","*","-","[","]"].includes(thisone)){
+                if([" ","\"","(",")","<",">",":","+","=","/","*","-","[","]",","].includes(thisone)){
                     this.addRawToken();
                     this.rawitem = thisone;
                     this.addRawToken();
@@ -175,7 +182,11 @@ class SnakeCharmerPythonClassSourceLine{
         for(var i = 0 ; i < this.rawtokenslist.length ; i++){
             var thisone = this.rawtokenslist[i];
             if(thisone=="\""){
-                instring != instring;
+                if(instring){
+                    instring = false;
+                }else{
+                    instring = true;
+                }
                 if(instring==false){
                     temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonString(stringstring));
                     stringstring = "";
@@ -184,7 +195,7 @@ class SnakeCharmerPythonClassSourceLine{
                 stringstring += thisone;
             }else if(thisone==" "){
 
-            }else if([ "(", ")", "<", ">", ":", "+", "=", "/", "*", "-", "[", "]" ,'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'].includes(thisone)){
+            }else if([ "(", ")", "<", ">", ":", "+", "=", "/", "*", "-", "[", "]","," ,'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'].includes(thisone)){
                 temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode(thisone));
             }else if(!isNaN(thisone)){
                 temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber(thisone));
@@ -192,14 +203,55 @@ class SnakeCharmerPythonClassSourceLine{
                 temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault(thisone));
             }
         }
-        this.rawtokenslist = temparray;
-        if(this.rawtokenslist.length==0){
+        this.rawtokenslist2 = temparray;
+        if(this.rawtokenslist2.length==0){
             return;
         }
         temparray = [];
-        for(var i = 0 ; i < this.rawtokenslist.length ; i++){
-            var thisitem = this.rawtokenslist[i];
+        this.rawtokenslist2.reverse();
+        while(true){
+            if(this.rawtokenslist2.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist2.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
+                if(this.rawtokenslist2.length==0){
+                    temparray.push(thisone);
+                }else{
+                    var thisone2 = this.rawtokenslist2.pop();
+                    if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isFunctionParameterOperator()&&thisone2.item=="("){
+                        var parameterlist = [];
+                        var debt = 0;
+                        var again = true;
+                        while(again){
+                            var thisone3 = this.rawtokenslist2.pop();
+                            if(typeof thisone3 === "undefined"){
+                                again = false;
+                            }else{
+                                if(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode){
+                                    if(thisone3.item==")"&&debt==0){
+                                        again = false;
+                                    }else if(thisone3.item==")"){
+                                        debt--;
+                                    }else if(thisone3.item=="("){
+                                        debt++;
+                                    }
+                                }else{
+                                    parameterlist.push(thisone3);
+                                }
+                            }
+                        }
+                        temparray.push(new SnakeCharmerConsoleClassSourceLineCommandCallable(thisone,parameterlist));
+                    }else{
+                        this.rawtokenslist2.push(thisone2);
+                        temparray.push(thisone);
+                    }
+                }
+            }else{
+                temparray.push(thisone);
+            }
         }
+        this.rawtokenslist3 = temparray;
 
         console.log(this);
     }

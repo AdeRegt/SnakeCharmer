@@ -202,6 +202,15 @@ class SnakeCharmerConsoleClassSourceLineCommandRaise extends SnakeCharmerConsole
     }
 }
 
+class SnakeCharmerConsoleClassSourceLineCommandFor extends SnakeCharmerConsoleClassSourceLineExecutable{
+
+    constructor(item,itemarray){
+        super();
+        this.item = item;
+        this.itemarray = itemarray;
+    }
+}
+
 class SnakeCharmerPythonClassSourceLine{
 
     constructor(rawline,linenumber){
@@ -467,6 +476,32 @@ class SnakeCharmerPythonClassSourceLine{
             if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone.item == "raise"){
                 var thisone2 = this.rawtokenslist.pop();
                 temparray.push(new SnakeCharmerConsoleClassSourceLineCommandRaise(thisone2));
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        // detect for
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone.item == "for"){
+                var thisone2 = this.rawtokenslist.pop();
+                var thisone3 = this.rawtokenslist.pop();
+                if(!(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone3.item == "in")){
+                    throw new Error("Expected: in after for [statement] ",this);
+                }
+                var thisone4 = this.rawtokenslist.pop();
+                var thisone5 = this.rawtokenslist.pop();
+                if(!(thisone5 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone5.item == ":")){
+                    throw new Error("Expected: : after for [statement] in [statement] ",this);
+                }
+                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandFor(thisone2,thisone3));
             }else{
                 temparray.push(thisone);
             }

@@ -123,11 +123,23 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode{
     }
 
     isMathematicOperator(){
-        return ["+", "=", "/", "*", "-"].includes(this.item);
+        return ["+", "=", "/", "*", "-", "<", ">", "+=", "-=", "/=", "*=", ">=", "<="].includes(this.item);
+    }
+
+    isAssignOperator(){
+        return ["=", "+=", "-=", "/=", "*="].includes(this.item);
+    }
+
+    isMathOperationOperator(){
+        return ["+", "/", "*", "-", "<", ">", "<=", ">="].includes(this.item);
     }
 
     isFunctionParameterOperator(){
         return ["(", ",", ")"].includes(this.item);
+    }
+
+    isComma(){
+        return [","].includes(this.item);
     }
 }
 
@@ -135,6 +147,22 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
 
     constructor(item){
         this.item = item;
+    }
+}
+
+class SnakeCharmerConsoleClassSourceLineCommandMathematical{
+
+    constructor(parameters){
+        this.parameters = parameters;
+    }
+}
+
+class SnakeCharmerConsoleClassSourceLineCommandAssignation{
+
+    constructor(variable,operator,newvalue){
+        this.variable = variable;
+        this.operator = operator;
+        this.newvalue = newvalue;
     }
 }
 
@@ -149,12 +177,16 @@ class SnakeCharmerConsoleClassSourceLineCommandCallable{
 class SnakeCharmerPythonClassSourceLine{
 
     constructor(rawline,linenumber){
+
+        // get all the basic info
         this.rawline = rawline;
         this.linenumer = linenumber;
         this.tokens = [];
         this.rawtokenslist = [];
         this.tabs = 0;
 
+        // start turning it into tokens
+        // rawdata
         var rawtokens = rawline.split("");
         this.rawitem = "";
         var firstone = true;
@@ -164,7 +196,7 @@ class SnakeCharmerPythonClassSourceLine{
                 this.tabs++;
             }else{
                 firstone = false;
-                if([" ","\"","(",")","<",">",":","+","=","/","*","-","[","]",","].includes(thisone)){
+                if([" ","\"","(",")","<",">",":","+","=","/","*","-","[","]",",","\'"].includes(thisone)){
                     this.addRawToken();
                     this.rawitem = thisone;
                     this.addRawToken();
@@ -176,9 +208,12 @@ class SnakeCharmerPythonClassSourceLine{
         this.addRawToken();
         delete this.rawitem;
 
+        // detect tokens
         var temparray = [];
         var instring = false;
         var stringstring = "";
+        var instring2 = false;
+        var stringstring2 = "";
         for(var i = 0 ; i < this.rawtokenslist.length ; i++){
             var thisone = this.rawtokenslist[i];
             if(thisone=="\""){
@@ -193,8 +228,20 @@ class SnakeCharmerPythonClassSourceLine{
                 }
             }else if(instring){
                 stringstring += thisone;
+            }else if(thisone=="\'"){
+                if(instring2){
+                    instring2 = false;
+                }else{
+                    instring2 = true;
+                }
+                if(instring2==false){
+                    temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonString(stringstring2));
+                    stringstring2 = "";
+                }
+            }else if(instring2){
+                stringstring2 += thisone;
             }else if(thisone==" "){
-
+                // ignore whitespace
             }else if([ "(", ")", "<", ">", ":", "+", "=", "/", "*", "-", "[", "]","," ,'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'].includes(thisone)){
                 temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode(thisone));
             }else if(!isNaN(thisone)){
@@ -203,28 +250,87 @@ class SnakeCharmerPythonClassSourceLine{
                 temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault(thisone));
             }
         }
-        this.rawtokenslist2 = temparray;
-        if(this.rawtokenslist2.length==0){
+        this.rawtokenslist = temparray;
+        if(this.rawtokenslist.length==0){
             return;
         }
+
+        // combine token which can be together
         temparray = [];
-        this.rawtokenslist2.reverse();
+        this.rawtokenslist.reverse();
         while(true){
-            if(this.rawtokenslist2.length==0){
+            if(this.rawtokenslist.length==0){
                 break;
             }
-            var thisone = this.rawtokenslist2.pop();
-            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
-                if(this.rawtokenslist2.length==0){
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode&&thisone.isMathematicOperator()){
+                var thisone2 = this.rawtokenslist.pop();
+                if(thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode&&thisone2.isMathematicOperator()){
+                    temparray.push(new SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode(thisone.item+""+thisone2.item));
+                }else{
+                    this.rawtokenslist.push(thisone2);
+                    temparray.push(thisone);
+                }
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        // detect math operations
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault || thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber){
+                if(this.rawtokenslist.length==0){
                     temparray.push(thisone);
                 }else{
-                    var thisone2 = this.rawtokenslist2.pop();
+                    var itemarray = [];
+                    var thisone2 = this.rawtokenslist.pop();
+                    if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isMathOperationOperator()){
+                        itemarray.push(thisone);
+                        itemarray.push(thisone2);
+                        var thisone3 = this.rawtokenslist.pop();
+                        if(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault || thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber){
+                            itemarray.push(thisone3);
+                        }else{
+                            throw new Error("Error: expected: default or number",thisone,thisone2,thisone3);
+                        }
+                        temparray.push(new SnakeCharmerConsoleClassSourceLineCommandMathematical(itemarray));
+                    }else{
+                        this.rawtokenslist.push(thisone2);
+                        temparray.push(thisone);
+                    }
+                }
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        // detect function calls
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
+                if(this.rawtokenslist.length==0){
+                    temparray.push(thisone);
+                }else{
+                    var thisone2 = this.rawtokenslist.pop();
                     if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isFunctionParameterOperator()&&thisone2.item=="("){
                         var parameterlist = [];
                         var debt = 0;
                         var again = true;
                         while(again){
-                            var thisone3 = this.rawtokenslist2.pop();
+                            var thisone3 = this.rawtokenslist.pop();
                             if(typeof thisone3 === "undefined"){
                                 again = false;
                             }else{
@@ -243,7 +349,7 @@ class SnakeCharmerPythonClassSourceLine{
                         }
                         temparray.push(new SnakeCharmerConsoleClassSourceLineCommandCallable(thisone,parameterlist));
                     }else{
-                        this.rawtokenslist2.push(thisone2);
+                        this.rawtokenslist.push(thisone2);
                         temparray.push(thisone);
                     }
                 }
@@ -251,7 +357,34 @@ class SnakeCharmerPythonClassSourceLine{
                 temparray.push(thisone);
             }
         }
-        this.rawtokenslist3 = temparray;
+        this.rawtokenslist = temparray;
+
+        // detect assignations
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
+                if(this.rawtokenslist.length==0){
+                    temparray.push(thisone);
+                }else{
+                    var thisone2 = this.rawtokenslist.pop();
+                    if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isAssignOperator()){
+                        var thisone3 = this.rawtokenslist.pop();
+                        temparray.push(new SnakeCharmerConsoleClassSourceLineCommandAssignation(thisone,thisone2,thisone3));
+                    }else{
+                        this.rawtokenslist.push(thisone2);
+                        temparray.push(thisone);
+                    }
+                }
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
 
         console.log(this);
     }

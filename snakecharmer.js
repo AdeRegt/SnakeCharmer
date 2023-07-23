@@ -150,6 +150,8 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
     }
 }
 
+class SnakeCharmerConsoleClassSourceLineExecutable{}
+
 class SnakeCharmerConsoleClassSourceLineCommandMathematical{
 
     constructor(parameters){
@@ -157,20 +159,46 @@ class SnakeCharmerConsoleClassSourceLineCommandMathematical{
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineCommandAssignation{
+class SnakeCharmerConsoleClassSourceLineCommandAssignation extends SnakeCharmerConsoleClassSourceLineExecutable{
 
     constructor(variable,operator,newvalue){
+        super();
         this.variable = variable;
         this.operator = operator;
         this.newvalue = newvalue;
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineCommandCallable{
+class SnakeCharmerConsoleClassSourceLineCommandCallable extends SnakeCharmerConsoleClassSourceLineExecutable{
 
     constructor(functionname,parameters){
+        super();
         this.functionname = functionname;
         this.parameters = parameters;
+    }
+}
+
+class SnakeCharmerConsoleClassSourceLineCommandWhile extends SnakeCharmerConsoleClassSourceLineExecutable{
+
+    constructor(statement){
+        super();
+        this.statement = statement;
+    }
+}
+
+class SnakeCharmerConsoleClassSourceLineCommandIf extends SnakeCharmerConsoleClassSourceLineExecutable{
+
+    constructor(statement){
+        super();
+        this.statement = statement;
+    }
+}
+
+class SnakeCharmerConsoleClassSourceLineCommandRaise extends SnakeCharmerConsoleClassSourceLineExecutable{
+
+    constructor(callable){
+        super();
+        this.callable = callable;
     }
 }
 
@@ -181,7 +209,7 @@ class SnakeCharmerPythonClassSourceLine{
         // get all the basic info
         this.rawline = rawline;
         this.linenumer = linenumber;
-        this.tokens = [];
+        this.executable;
         this.rawtokenslist = [];
         this.tabs = 0;
 
@@ -385,6 +413,79 @@ class SnakeCharmerPythonClassSourceLine{
             }
         }
         this.rawtokenslist = temparray;
+
+        // detect while
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone.item == "while"){
+                var thisone2 = this.rawtokenslist.pop();
+                var thisone3 = this.rawtokenslist.pop();
+                if(!(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone3.item == ":")){
+                    throw new Error("Expected: : after while [statement] ",this);
+                }
+                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandWhile(thisone2));
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        // detect if
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone.item == "if"){
+                var thisone2 = this.rawtokenslist.pop();
+                var thisone3 = this.rawtokenslist.pop();
+                if(!(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone3.item == ":")){
+                    throw new Error("Expected: : after if [statement] ",this);
+                }
+                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandIf(thisone2));
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        // detect raise
+        temparray = [];
+        this.rawtokenslist.reverse();
+        while(true){
+            if(this.rawtokenslist.length==0){
+                break;
+            }
+            var thisone = this.rawtokenslist.pop();
+            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone.item == "raise"){
+                var thisone2 = this.rawtokenslist.pop();
+                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandRaise(thisone2));
+            }else{
+                temparray.push(thisone);
+            }
+        }
+        this.rawtokenslist = temparray;
+
+        if(this.rawtokenslist.length!=1){
+            console.error(this);
+            throw new Error("Expected: one executable item, found: ",this);
+        }
+
+        if(!this.rawtokenslist[0] instanceof SnakeCharmerConsoleClassSourceLineExecutable){
+            console.error(this);
+            throw new Error("Item is not an executable",this);
+        }
+
+        this.executable = this.rawtokenslist[0];
+
+        delete this.rawtokenslist;
 
         console.log(this);
     }

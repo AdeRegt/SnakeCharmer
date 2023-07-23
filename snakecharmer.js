@@ -150,7 +150,16 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineExecutable{}
+class SnakeCharmerConsoleClassSourceLineExecutable{
+
+    constructor(){
+        this.underlyingblocks = [];
+    }
+
+    expectUnderlyingBlocks(){
+        return false;
+    }
+}
 
 class SnakeCharmerConsoleClassSourceLineCommandMathematical{
 
@@ -184,6 +193,10 @@ class SnakeCharmerConsoleClassSourceLineCommandWhile extends SnakeCharmerConsole
         super();
         this.statement = statement;
     }
+
+    expectUnderlyingBlocks(){
+        return true;
+    }
 }
 
 class SnakeCharmerConsoleClassSourceLineCommandIf extends SnakeCharmerConsoleClassSourceLineExecutable{
@@ -191,6 +204,10 @@ class SnakeCharmerConsoleClassSourceLineCommandIf extends SnakeCharmerConsoleCla
     constructor(statement){
         super();
         this.statement = statement;
+    }
+
+    expectUnderlyingBlocks(){
+        return true;
     }
 }
 
@@ -209,6 +226,10 @@ class SnakeCharmerConsoleClassSourceLineCommandFor extends SnakeCharmerConsoleCl
         this.item = item;
         this.itemarray = itemarray;
     }
+
+    expectUnderlyingBlocks(){
+        return true;
+    }
 }
 
 class SnakeCharmerPythonClassSourceLine{
@@ -218,7 +239,7 @@ class SnakeCharmerPythonClassSourceLine{
         // get all the basic info
         this.rawline = rawline;
         this.linenumer = linenumber;
-        this.executable;
+        this.executable = null;
         this.rawtokenslist = [];
         this.tabs = 0;
 
@@ -521,8 +542,6 @@ class SnakeCharmerPythonClassSourceLine{
         this.executable = this.rawtokenslist[0];
 
         delete this.rawtokenslist;
-
-        console.log(this);
     }
 
     addRawToken(){
@@ -572,8 +591,32 @@ class SnakeCharmerPythonClass{
         var rawcodelinestrings = this.rawcode.split("\n");
         var rawcodelist = [];
         for(var i = 0 ; i < rawcodelinestrings.length ; i++){
-            rawcodelist.push(new SnakeCharmerPythonClassSourceLine(rawcodelinestrings[i],i+1));
+            var item = new SnakeCharmerPythonClassSourceLine(rawcodelinestrings[i],i+1);
+            if(item.executable==null){
+                continue;
+            }
+            rawcodelist.push(item);
         }
+
+        // attach things under eachother....
+        var lasthigherpoint = null;
+        this.code = [];
+        for(var i = 0 ; i < rawcodelist.length ; i++){
+            var thisone = rawcodelist[i];
+            if(lasthigherpoint==null&&!thisone.executable.expectUnderlyingBlocks()){
+                this.code.push(thisone);
+            }else if(lasthigherpoint==null&&thisone.executable.expectUnderlyingBlocks()){
+                lasthigherpoint = thisone.executable;
+                this.code.push(thisone);
+            }else if(thisone.executable.expectUnderlyingBlocks()){
+                lasthigherpoint.underlyingblocks.push(thisone);
+                lasthigherpoint = thisone.executable;
+            }else{
+                lasthigherpoint.underlyingblocks.push(thisone);
+            }
+        }
+
+        console.log(this);
         
     }
 

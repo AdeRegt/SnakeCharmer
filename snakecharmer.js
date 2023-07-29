@@ -102,23 +102,36 @@ class SnakeCharmerConsolePrinter extends SnakeCharmerPrinter{
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault{
+class SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable{
+
+    constructor(){}
+
+    calculate(masterclass,line){
+        throw new Error("Not supported yet");
+    }
+
+}
+
+class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault extends SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable{
 
     constructor(item){
+        super();
         this.item = item;
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonString{
+class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonString extends SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable{
 
     constructor(item){
+        super();
         this.item = item;
     }
 }
 
-class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode{
+class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode extends SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable{
 
     constructor(item){
+        super();
         this.item = item;
     }
 
@@ -141,12 +154,41 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode{
     isComma(){
         return [","].includes(this.item);
     }
+
+    handleCommand(left,right,masterclass){
+        if(this.isAssignOperator()){
+            left = masterclass.getVariable(left);
+            if(left==null){
+                return right;
+            }
+            if(this.item=="="){
+                return right;
+            }else if(this.item=="+="){
+                return left + right;
+            }else if(this.item=="-="){
+                return left - right;
+            }else if(this.item=="/="){
+                return left / right;
+            }else if(this.item=="*="){
+                return left * right;
+            }else{
+                throw new Error("Unknown operator");
+            }
+        }else{
+            throw new Error("Not implemented yet");
+        }
+    }
 }
 
-class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber{
+class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonNumber extends SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable{
 
     constructor(item){
+        super();
         this.item = item;
+    }
+
+    calculate(masterclass,line){
+        return Number(this.item);
     }
 }
 
@@ -158,6 +200,10 @@ class SnakeCharmerConsoleClassSourceLineExecutable{
 
     expectUnderlyingBlocks(){
         return false;
+    }
+
+    execute(line,masterclass){
+        
     }
 }
 
@@ -175,6 +221,22 @@ class SnakeCharmerConsoleClassSourceLineCommandAssignation extends SnakeCharmerC
         this.variable = variable;
         this.operator = operator;
         this.newvalue = newvalue;
+    }
+
+    execute(line,masterclass){
+        super.execute(line,masterclass);
+        if(!(this.variable instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault)){
+            masterclass.reportError(line,"Variable expected here!");
+        }
+        if(!(this.operator instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)){
+            masterclass.reportError(line,"Opcode expected here!");
+        }
+        if(!(this.newvalue instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable)){
+            masterclass.reportError(line,"Calculatable expected here!");
+        }
+        var newtocreatevalue = this.newvalue.calculate(masterclass,line);
+        var calculatedvalue = this.operator.handleCommand(this.variable,newtocreatevalue,masterclass);
+        masterclass.setVariable(this.variable.item,calculatedvalue);
     }
 }
 
@@ -555,6 +617,32 @@ class SnakeCharmerPythonClassSourceLine{
     toString(){
         return this.linenumer + ": " + this.rawline;
     }
+
+    expectUnderlyingBlocks(){
+        return this.executable.expectUnderlyingBlocks();
+    }
+
+    executeUnderlyingBlocks(masterclass){
+        if(!this.expectUnderlyingBlocks()){
+            masterclass.reportError(this,"There are no underlying blocks alltrough you try to execute them...");
+        }
+        for(var i = 0 ; i < this.executable.underlyingblocks.length ; i++){
+            var thisone = this.executable.underlyingblocks[i];
+            thisone.execute(masterclass);
+        }
+    }
+
+    execute(masterclass){
+        if(window.navigator.pythonInterpeter.debug){
+            console.log(this);
+        }
+        if(this.executable instanceof SnakeCharmerConsoleClassSourceLineExecutable){
+            this.executable.execute(this,masterclass);
+        }else{
+            masterclass.reportError(this,"Object cannot be executed");
+        }
+        return true;
+    }
 }
 
 class SnakeCharmerPythonClass{
@@ -616,16 +704,61 @@ class SnakeCharmerPythonClass{
             }
         }
 
-        console.log(this);
+        this.variablelist = {};
+        this.scopepointer = [];
         
     }
 
+    enterScope(scopename){
+        this.scopepointer.push(scopename);
+        this.variablelist[scopename] = {};
+    }
+
+    leaveScope(){
+        this.scopepointer.pop();
+    }
+
+    getVariable(varname){
+        for(var a = this.scopepointer.length-1 ; a > -1 ; a--){
+            var scope = this.scopepointer[a];
+            var bridge = this.variablelist[scope];
+            if(typeof(bridge[varname])!=="undefined"){
+                return bridge[varname];
+            }
+        }
+        return null;
+    }
+
+    setVariable(varname,varvalue){
+        for(var a = this.scopepointer.length-1 ; a > -1 ; a--){
+            var scope = this.scopepointer[a];
+            this.variablelist[scope][varname] = varvalue;
+        }
+    }
+
     reportError(lineobject,message){
-        throw new Error("An error occured.\n\nSourcefile:"+this.name+"\nLine:"+lineobject.toString()+"\nMessage:"+message);
+        throw new Error("An error occured.\n\nSourcefile:\t"+this.name+"\nLine:\t\t"+lineobject.toString()+"\nMessage:\t"+message);
     }
 
     print(message){
         this.printer.print(message);
+    }
+
+    runCodeWithoutFunction(){
+        if(window.navigator.pythonInterpeter.debug){
+            console.log("snakecharmers: " + this.name + ": now running runCodeWithoutFunction");
+        }
+        this.enterScope("_");
+        for(var i = 0 ; i < this.code.length ; i++){
+            var thisone = this.code[i];
+            if(thisone.expectUnderlyingBlocks()){
+                if(thisone.execute(this)){
+                    thisone.executeUnderlyingBlocks(this);
+                }
+            }else{
+                thisone.execute(this);
+            }
+        }
     }
 }
 
@@ -671,13 +804,25 @@ function snakecharmer_inspect_script_element(scriptelement){
     }
 
     var codeobject = new SnakeCharmerPythonClass(classname,outputtarget,scriptelement.innerHTML);
+    window.navigator.pythonInterpeter.stack.push(codeobject);
 }
 
+window.navigator.pythonInterpeter = {};
+window.navigator.pythonInterpeter.version = 0.1;
+window.navigator.pythonInterpeter.vendor = "Sanderslando";
+window.navigator.pythonInterpeter.debug = true;
+window.navigator.pythonInterpeter.initialised = false;
+window.navigator.pythonInterpeter.stack = [];
 document.addEventListener("DOMContentLoaded",function(){
     console.log("snakecharmer: snakecharmer initialised");
     var available_codes = document.querySelectorAll("script");
     for(var i = 0 ; i < available_codes.length ; i++){
         snakecharmer_inspect_script_element(available_codes[i]);
     }
+    window.navigator.pythonInterpeter.initialised = true;
     console.log("snakecharmer: snakecharmer finished!");
+    for(var i = 0 ; i < window.navigator.pythonInterpeter.stack.length ; i++){
+        var deze = window.navigator.pythonInterpeter.stack[i];
+        deze.runCodeWithoutFunction();
+    }
 });

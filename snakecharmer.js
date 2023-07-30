@@ -205,6 +205,24 @@ class SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode extends SnakeC
             }else{
                 throw new Error("Unknown operator");
             }
+        }else if(this.isMathOperationOperator()){
+            if(!(typeof(left)==="number")){
+                left = left.calculate(masterclass,null);
+            }
+            if(!(typeof(right)==="number")){
+                right = right.calculate(masterclass,null);
+            }
+            if(this.item=="+"){
+                return left + right;
+            }else if(this.item=="-"){
+                return left - right;
+            }else if(this.item=="/"){
+                return left / right;
+            }else if(this.item=="*"){
+                return left * right;
+            }else{
+                throw new Error("Unknown operator");
+            }
         }else{
             throw new Error("Not implemented yet");
         }
@@ -248,7 +266,7 @@ class SnakeCharmerConsoleClassSourceLineCommandMathematical{
         this.parameters = parameters;
     }
 
-    calculate(line,masterclass){
+    calculate(masterclass,line){
         var result = null;
         if(this.parameters.length>0){
             if(!(this.parameters[0] instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable)){
@@ -334,7 +352,7 @@ class SnakeCharmerConsoleClassSourceLineCommandWhile extends SnakeCharmerConsole
 
     executeStatement(line,masterclass){
         if(this.statement instanceof SnakeCharmerConsoleClassSourceLineCommandMathematical){
-            return this.statement.calculate(line,masterclass)>0;
+            return this.statement.calculate(masterclass,line)>0;
         }
         return false;
     }
@@ -359,7 +377,7 @@ class SnakeCharmerConsoleClassSourceLineCommandIf extends SnakeCharmerConsoleCla
 
     executeStatement(line,masterclass){
         if(this.statement instanceof SnakeCharmerConsoleClassSourceLineCommandMathematical){
-            return this.statement.calculate(line,masterclass)>0;
+            return this.statement.calculate(masterclass,line)>0;
         }
         return false;
     }
@@ -395,6 +413,14 @@ class SnakeCharmerConsoleClassSourceLineCommandFor extends SnakeCharmerConsoleCl
     expectUnderlyingBlocks(){
         return true;
     }
+
+    execute(line,masterclass){
+        this.itemarray.calculate(masterclass,line).forEach(element => {
+            masterclass.setVariable(this.item.item,element);
+            line.executeUnderlyingBlocks(masterclass);
+        });
+    }
+
 }
 
 class SnakeCharmerPythonClassSourceLine{
@@ -696,7 +722,7 @@ class SnakeCharmerPythonClassSourceLine{
                 if(!(thisone5 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode && thisone5.item == ":")){
                     throw new Error("Expected: : after for [statement] in [statement] ",this);
                 }
-                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandFor(thisone2,thisone3));
+                temparray.push(new SnakeCharmerConsoleClassSourceLineCommandFor(thisone2,thisone4));
             }else{
                 temparray.push(thisone);
             }
@@ -945,6 +971,13 @@ window.navigator.pythonInterpeter.bridge.input = function(args){
 };
 window.navigator.pythonInterpeter.bridge.ValueError = function(args){
     return args[1];
+};
+window.navigator.pythonInterpeter.bridge.range = function(args){
+    var list = [];
+    for(var i = args[1] ; i < args[2] ; i++){
+        list.push(i);
+    }
+    return list;
 };
 document.addEventListener("DOMContentLoaded",function(){
     if(window.navigator.pythonInterpeter.debug){

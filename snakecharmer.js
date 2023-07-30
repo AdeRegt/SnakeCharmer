@@ -282,7 +282,7 @@ class SnakeCharmerConsoleClassSourceLineCommandAssignation extends SnakeCharmerC
         if(!(this.operator instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)){
             masterclass.reportError(line,"Opcode expected here!");
         }
-        if(!(this.newvalue instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable)){
+        if(!((this.newvalue instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCalculatable)||(this.newvalue instanceof SnakeCharmerConsoleClassSourceLineCommandCallable))){
             masterclass.reportError(line,"Calculatable expected here!");
         }
         var newtocreatevalue = this.newvalue.calculate(masterclass,line);
@@ -299,11 +299,14 @@ class SnakeCharmerConsoleClassSourceLineCommandCallable extends SnakeCharmerCons
         this.parameters = parameters;
     }
 
-    execute(line,masterclass){
+    calculate(masterclass,line){
         if(!(this.functionname instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault)){
             masterclass.reportError(line,"Functionname expected here!");
         }
         var func = window.navigator.pythonInterpeter.bridge[this.functionname.item];
+        if(typeof(func)!=="function"){
+            masterclass.reportError(line,"No such function: "+this.functionname.item);
+        }
         var params = [];
         params.push(masterclass);
         for(var i = 0 ; i < this.parameters.length ; i++){
@@ -311,6 +314,10 @@ class SnakeCharmerConsoleClassSourceLineCommandCallable extends SnakeCharmerCons
             params.push(thisone.calculate(masterclass,line));
         }
         return func(params);
+    }
+
+    execute(line,masterclass){
+        return this.calculate(masterclass,line);
     }
 }
 
@@ -349,6 +356,20 @@ class SnakeCharmerConsoleClassSourceLineCommandIf extends SnakeCharmerConsoleCla
     expectUnderlyingBlocks(){
         return true;
     }
+
+    executeStatement(line,masterclass){
+        if(this.statement instanceof SnakeCharmerConsoleClassSourceLineCommandMathematical){
+            return this.statement.calculate(line,masterclass)>0;
+        }
+        return false;
+    }
+
+    execute(line,masterclass){
+        if(this.executeStatement(line,masterclass)){
+            line.executeUnderlyingBlocks(masterclass);
+        }
+    }
+
 }
 
 class SnakeCharmerConsoleClassSourceLineCommandRaise extends SnakeCharmerConsoleClassSourceLineExecutable{
@@ -356,6 +377,10 @@ class SnakeCharmerConsoleClassSourceLineCommandRaise extends SnakeCharmerConsole
     constructor(callable){
         super();
         this.callable = callable;
+    }
+
+    execute(line,masterclass){
+        throw this.callable.execute(line,masterclass);
     }
 }
 
@@ -511,51 +536,60 @@ class SnakeCharmerPythonClassSourceLine{
         this.rawtokenslist = temparray;
 
         // detect function calls
-        temparray = [];
-        this.rawtokenslist.reverse();
-        while(true){
-            if(this.rawtokenslist.length==0){
-                break;
-            }
-            var thisone = this.rawtokenslist.pop();
-            if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
+        var requiresaonceagaincall = true;
+        while(requiresaonceagaincall){
+            requiresaonceagaincall = false;
+            temparray = [];
+            this.rawtokenslist.reverse();
+            while(true){
                 if(this.rawtokenslist.length==0){
-                    temparray.push(thisone);
-                }else{
-                    var thisone2 = this.rawtokenslist.pop();
-                    if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isFunctionParameterOperator()&&thisone2.item=="("){
-                        var parameterlist = [];
-                        var debt = 0;
-                        var again = true;
-                        while(again){
-                            var thisone3 = this.rawtokenslist.pop();
-                            if(typeof thisone3 === "undefined"){
-                                again = false;
-                            }else{
-                                if(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode){
-                                    if(thisone3.item==")"&&debt==0){
-                                        again = false;
-                                    }else if(thisone3.item==")"){
-                                        debt--;
-                                    }else if(thisone3.item=="("){
-                                        debt++;
-                                    }
+                    break;
+                }
+                var thisone = this.rawtokenslist.pop();
+                if(thisone instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonDefault){
+                    if(this.rawtokenslist.length==0){
+                        temparray.push(thisone);
+                    }else{
+                        var thisone2 = this.rawtokenslist.pop();
+                        if((thisone2 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode)&&thisone2.isFunctionParameterOperator()&&thisone2.item=="("){
+                            var parameterlist = [];
+                            var again = true;
+                            while(again){
+                                var thisone3 = this.rawtokenslist.pop();
+                                if(typeof thisone3 === "undefined"){
+                                    again = false;
                                 }else{
-                                    parameterlist.push(thisone3);
+                                    if(thisone3 instanceof SnakeCharmerConsoleClassSourceLineTokenAbstractCommonOpcode){
+                                        if(thisone3.item==")"){
+                                            again = false;
+                                        }else if(thisone3.item=="("){
+                                            // there is a call inside us!!!
+                                            temparray.push(thisone);
+                                            temparray.push(thisone2);
+                                            for(var i = 0 ; i < (parameterlist.length-1) ; i++){
+                                                temparray.push(parameterlist[i]);
+                                            }
+                                            thisone = parameterlist[parameterlist.length-1];
+                                            parameterlist = [];
+                                        }
+                                    }else{
+                                        parameterlist.push(thisone3);
+                                    }
                                 }
                             }
+                            temparray.push(new SnakeCharmerConsoleClassSourceLineCommandCallable(thisone,parameterlist));
+                            requiresaonceagaincall = true;
+                        }else{
+                            this.rawtokenslist.push(thisone2);
+                            temparray.push(thisone);
                         }
-                        temparray.push(new SnakeCharmerConsoleClassSourceLineCommandCallable(thisone,parameterlist));
-                    }else{
-                        this.rawtokenslist.push(thisone2);
-                        temparray.push(thisone);
                     }
+                }else{
+                    temparray.push(thisone);
                 }
-            }else{
-                temparray.push(thisone);
             }
+            this.rawtokenslist = temparray;
         }
-        this.rawtokenslist = temparray;
 
         // detect assignations
         temparray = [];
@@ -765,20 +799,34 @@ class SnakeCharmerPythonClass{
         }
 
         // attach things under eachother....
-        var lasthigherpoint = null;
         this.code = [];
+        var lastone = null;
+        var tablist = [rawcodelist[0].tabs];
         for(var i = 0 ; i < rawcodelist.length ; i++){
             var thisone = rawcodelist[i];
-            if(lasthigherpoint==null&&!thisone.executable.expectUnderlyingBlocks()){
+            if(lastone==null && thisone.expectUnderlyingBlocks()){
                 this.code.push(thisone);
-            }else if(lasthigherpoint==null&&thisone.executable.expectUnderlyingBlocks()){
-                lasthigherpoint = thisone.executable;
+                lastone = thisone;
+                lastone.parent = this.code;
+            }else if(lastone==null){
                 this.code.push(thisone);
-            }else if(thisone.executable.expectUnderlyingBlocks()){
-                lasthigherpoint.underlyingblocks.push(thisone);
-                lasthigherpoint = thisone.executable;
+            }else if(thisone.expectUnderlyingBlocks()){
+                lastone.executable.underlyingblocks.push(thisone);
+                lastone.parent = thisone;
+                lastone = thisone;
+            }else if(lastone.executable.underlyingblocks.length>0&&tablist[tablist.length-1]!=thisone.tabs){
+                if(Array.isArray(lastone.parent)){
+                    lastone = null;
+                    this.code.push(thisone);
+                }else{
+                    lastone = lastone.parent;
+                    lastone.executable.underlyingblocks.push(thisone);
+                }
             }else{
-                lasthigherpoint.underlyingblocks.push(thisone);
+                if(lastone.executable.underlyingblocks.length==0){
+                    tablist.push(thisone.tabs);
+                }
+                lastone.executable.underlyingblocks.push(thisone);
             }
         }
 
@@ -888,6 +936,15 @@ window.navigator.pythonInterpeter.stack = [];
 window.navigator.pythonInterpeter.bridge = {};
 window.navigator.pythonInterpeter.bridge.print = function(args){
     args[0].print(args[1]);
+};
+window.navigator.pythonInterpeter.bridge.int = function(args){
+    return Number(args[1]);
+};
+window.navigator.pythonInterpeter.bridge.input = function(args){
+    return window.prompt(args[1]);
+};
+window.navigator.pythonInterpeter.bridge.ValueError = function(args){
+    return args[1];
 };
 document.addEventListener("DOMContentLoaded",function(){
     if(window.navigator.pythonInterpeter.debug){
